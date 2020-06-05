@@ -1,0 +1,404 @@
+---
+title: "Desafio EstatSite"
+author: "Marco de Pereira Binda"
+date: "30/05/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Apresentação
+
+Perguntas e respostas encaminhadas ao <Desafio do EstatSite>[link](http://estatsite.com.br/2020/05/30/desafio-do-estatsite/#more-11474> em 31/05/2020).
+
+## PERGUNTA 01
+
+*Utilizando o dataset Fifa19:* Se fossemos classificar a força dos clubes de acordo com a média do campo Overall de seus jogadores, considerando somente clubes com pelo menos 25 jogadores, qual seria o clube mais forte? E o mais fraco?
+
+```{r, echo = FALSE}
+
+library(readr)
+library(tidyverse)
+
+fifa19 <- read_delim("fifa19.csv", delim = ',' ,
+                     col_types = cols(Club = col_factor(),
+                                      Nationality = col_factor()))
+
+```
+
+```{r}
+
+fifa19_01 <- fifa19 %>% 
+  group_by(Club) %>%
+  summarise(Count = n(), Overall = mean(Overall)) %>%
+  filter(Count >= 25) %>%
+  arrange(desc(Overall))
+
+# Clube mais forte 
+head(fifa19_01,1)
+
+# Clube mais fraco
+tail(fifa19_01,1)
+
+```
+
+
+## PERGUNTA 02
+
+*Utilizando o dataset Fifa19:* Se fossemos olhar somente para os 20 melhores jogadores de cada seleção, qual nação teria o time mais forte utilizando o critério da média do Overall de seus jogadores? Em outras palavras, filtre somente os 20 melhores jogadores de cada seleção, sendo o critério de “melhor” o campo Overall, e, utilizando o mesmo campo, verifique qual seleção tem a melhor média.
+
+```{r}
+
+fifa19_02 <- fifa19 %>% 
+  group_by(Nationality) %>%
+  arrange(Nationality, desc(Overall)) %>%
+  top_n(20, Overall) %>%
+  summarise(Overall = mean(Overall),
+            Count = n())%>%
+  arrange(desc(Overall))
+
+# Seleção mais forte 
+head(fifa19_02,1)
+
+# CORREÇÃO
+# solução elaborada em 31/05/2020 para eliminar os casos repetidos de jogadores
+# com Overall repetidos
+
+library(zoo)
+
+fifa19_02_01 <- fifa19 %>% 
+  group_by(Nationality) %>%
+  arrange(Nationality, desc(Overall)) %>%
+  filter(between(row_number(), 1, 20)) %>%
+  summarise(Overall = mean(Overall),
+            Count = n()) %>%
+  arrange(desc(Overall))
+
+head(fifa19_02_01,1)
+  
+```
+
+
+## PERGUNTA 03
+
+*Utilizando o dataset Fifa19:* Neste exercício, considere o campo Release Clause como sendo o valor do jogador. Considerando somente os clubes que possuem mais de 25 jogadores, quais são os 5 clubes mais valiosos?
+
+```{r}
+
+fifa19_03 <- fifa19 %>% 
+  mutate(Value_Clause = parse_number(`Release Clause`),
+         Value_Type = str_sub(`Release Clause`, -1),
+         Release_Clause = ifelse(Value_Type == 'M', Value_Clause * 1000000, Value_Clause * 1000)) %>%
+  group_by(Club) %>%
+  summarise(Count = n(), Release_Clause = sum(Release_Clause)) %>%
+  filter(Count >= 25) %>%
+  arrange(desc(Release_Clause))
+
+# 05 Clubes mais valiosos 
+head(fifa19_03,5)
+
+```
+
+
+## PERGUNTA 04
+
+*ERRATA Utilizando o dataset Fifa19:* Imagine que você é diretor de um clube e possui um certo orçamento para comprar 11 jogadores que irão compor o time titular. Cada jogador é contratado de acordo com a release clause. O presidente deseja trazer jogadores jovens, sendo assim, pede que você não contrate ninguém acima de 29 anos. O presidente também demanda que você não traga nenhuma estrelinha que possa conturbar o elenco, sendo assim, o preço máximo a ser pago por um jogador não pode ultrapassa os 15 milhões de euros. Quais são os 11 jogadores de maior Overall que você consegue trazer para seu clube? Isto, é claro, seguindo as restrições orçamentárias e etárias impostas pelo seu chefe.
+Para fins do exercício, desconsidere aqui as posições táticas dos jogadores. Ou seja, traga 11 atacantes se isso for a melhor escolha.
+
+```{r}
+
+# OBS - A resolução abaixo é da versão anterior proposta no site, que determinava que deveriam ser comprados os primeiros 11 jogadores com maior Overall, com menos de 29 anos e cuja soma das Release Clause não ultrapassasse $600mi.
+
+options(scipen=999)
+library(zoo)
+
+fifa19_04 <- fifa19 %>% 
+  mutate(Value_Clause = as.double(parse_number(`Release Clause`)),
+         Value_Type = str_sub(`Release Clause`, -1),
+         Release_Clause = ifelse(Value_Type == 'M', Value_Clause * 1000000, Value_Clause * 1000)) %>%
+  filter(Age < 30) %>%
+  arrange(desc(Release_Clause)) %>%
+  mutate(Release_Sum = as.double(rollsum(Release_Clause, 11, fill = NA))) %>%
+  select(Name, Age, Overall, Release_Clause, Release_Sum) %>%
+  arrange(desc(Release_Clause))
+
+pos <- min(which(fifa19_04$Release_Sum < 600000001))
+
+# 11 jogadores de maior Overall, menos de 29 anos cuja compra some menos de 600 milhões
+fifa19_04[c((pos-5):(pos+5)),]
+
+# Por algum motivo, a função rollsum está centrando o valor do Release_Sum (ou seja, era para o primeiro valor estar no 11º registro), mas está no 5º
+
+```
+
+
+```{r}
+
+# Resposta conforme ERRATA
+
+fifa19_04_01 <- fifa19 %>% 
+  mutate(Value_Clause = parse_number(`Release Clause`),
+         Value_Type = str_sub(`Release Clause`, -1),
+         Release_Clause = ifelse(Value_Type == 'M', Value_Clause * 1000000, Value_Clause * 1000)) %>%
+  filter(Age < 30 & Release_Clause < 15000000) %>%
+  select(Name, Age, Overall, Release_Clause) %>%
+  arrange(desc(Overall))
+
+# 11 jogadores de maior Overall, menos de 29 anos cuja compra seja menor que 15 milhões
+head(fifa19_04_01,11)
+
+```
+
+
+## PERGUNTA 05
+
+*Utilizando o dataset Fifa19:* Utilizando a tabela com os jogadores que você selecionou no exercício anterior, crie uma coluna chamada High_Price que recebe 1 se a Release Clause do jogador está acima da mediana dos 11 selecionados, e 0 caso contrário.
+
+```{r}
+
+fifa19_05 <- fifa19_04[c(pos:(pos+10)),] %>%
+  mutate(High_Price = ifelse(Release_Clause > median(Release_Clause), 1, 0))
+
+# tabela com medianas
+fifa19_05
+
+```
+
+
+## PERGUNTA 06
+
+Apresente os histogramas com a distribuição do peso, idade e salário dos jogadores que você escolheu no exercício 4.
+
+```{r}
+
+nomes <- fifa19_05$Name
+fifa19_06 <- fifa19 %>%
+  filter(Name %in% nomes) %>%
+  select(Name, Weight, Age, Wage) %>%
+  mutate(Weight = parse_number(Weight),
+         Value_Type = str_sub(Wage, -1),
+         Wage = parse_number(Wage),
+         Wage = ifelse(Value_Type == 'M', Wage * 1000000, Wage * 1000))
+
+# Plotar histpgramas de peso, idade e salário
+hist(fifa19_06$Weight, main = "Peso (em lbs)", xlab = " ", ylab = "Frequência")
+hist(fifa19_06$Age, main = "Idade", xlab = " ", ylab = "Frequência")
+hist(fifa19_06$Wage, main = "Salário (em euros)", xlab = " ", ylab = "Frequência")
+
+```
+
+
+## PERGUNTA 07
+
+*Utilizando o dataset Iris:* Através de um gráfico de dispersão (scatterplot), verifique se há relação linear entre comprimento da pétala (Petal Length) e o comprimento da sépala (Sepal Length). Adicione também diferentes cores aos pontos de acordo com a espécie da flor. A resposta aqui é somente o gráfico, não se preocupe em fazer análises mais aprofundadas.
+
+```{r}
+
+iris <- read_delim("iris.csv", delim = ',')
+iris %>% ggplot(aes(PetalLengthCm, SepalLengthCm)) + 
+  geom_point(aes(col = Species)) + labs(x = 'Sepal Length cm', y = 'Petal Length cm')
+
+```
+
+
+## PERGUNTA 08
+
+*Utilizando o dataset Iris:* Primeiro, apague a substring “Iris-” da coluna Species. Em seguida, adicione 3 novas colunas à tabela inicial, sendo que cada coluna receberá uma dummy referente a cada uma das species. Ou seja, você deve criar uma coluna chamada Dummy_Setosa, que recebe 1 se a flor for da espécie Setosa e 0 caso contrário. O mesmo para as demais espécies.
+
+```{r}
+
+iris_08 <- iris %>%
+  mutate(Species = str_remove_all(Species, "Iris-"), 
+         Dummy_Setosa = ifelse(Species == "setosa", 1,0),
+         Dummy_Versicolor = ifelse(Species == "versicolor", 1,0),
+         Dummy_Virginica = ifelse(Species == "virginica", 1,0))
+
+```
+
+
+## PERGUNTA 09
+
+*Utilizando os Dados Históricos de MGLU3 e LREN3:* Mostre através de um gráfico de linhas a evolução do preço de fechamento das duas ações durante os anos de 2017, 2018 e 2019. No mesmo gráfico, trace um gráfico de linhas pontilhadas com a evolução do preço de abertura das duas ações no mesmo período. Utilize cores diferentes para cada linha e insira uma legenda para as cores/linhas. A legenda deve ficar no canto inferior direito, como este exemplo:
+
+```{r}
+
+library(tsibble)    
+
+MGLU3 <- read_delim("MGLU3.SA.csv", delim = ',',
+                                    col_types = cols(Open = col_double(), 
+                                                     High = col_double(), 
+                                                     Close = col_double(),
+                                                     Low = col_double(),
+                                                     Close = col_double(),
+                                                     `Adj Close` = col_double(),
+                                                     Volume = col_double()))
+LREN3 <- read_delim("LREN3.SA.csv", delim = ',',
+                                    col_types = cols(Open = col_double(), 
+                                                     High = col_double(), 
+                                                     Close = col_double(),
+                                                     Low = col_double(),
+                                                     Close = col_double(),
+                                                     `Adj Close` = col_double(),
+                                                     Volume = col_double()))
+
+
+portfolio <- cbind(MGLU3 = MGLU3, LREN3 = LREN3)
+
+names(portfolio) <- c("Date", "MGLU3.Open", "MGLU3.High", "MGLU3.Low", "MGLU3.Close","MGLU3.AdjClose", "MGLU3.Volume", "LREN3.Date", "LREN3.Open", "LREN3.High", "LREN3.Low", "LREN3.Close", "LREN3.AdjClose", "LREN3.Volume") 
+portfolio <- portfolio[,-8] %>%
+  as_tsibble(index = Date)
+
+cores <- c("MGLU3.Open" = "blue", "MGLU3.Close" = "red", 
+           "LREN3.Open" = "green", "LREN3.Close" = "yellow")
+
+portfolio %>% filter(Date > '2016-12-31' & Date < '2020-01-01') %>%
+  ggplot(aes(Date)) + 
+  geom_line(aes(y = MGLU3.Close, col = 'MGLU3.Close')) + 
+  geom_line(aes(y = MGLU3.Open, col = 'MGLU3.Open'), linetype = "dashed") +
+  geom_line(aes(y = LREN3.Close, col = 'LREN3.Close')) + 
+  geom_line(aes(y = LREN3.Open, col = 'LREN3.Open'), linetype = "dashed") +
+  labs(title = "MGLU3 & LREN3 2017 - 2019", x = "ANo", y = "Preço", color = "Legend") +
+  scale_color_manual(values = cores) + 
+  theme(legend.position = c(0.9,0.15),
+        legend.title = element_blank(),
+        panel.background=element_rect(fill="transparent",colour=NA),
+        legend.key = element_rect(fill = "transparent", colour = "transparent"))
+
+```
+
+
+## PERGUNTA 10
+
+*Utilizando COMPRAS e CADASTRO:* A tabela COMPRAS possui as informações de todas as compras feitas pelos clientes da sua loja. Em CADASTRO, você encontrará as informações cadastrais dos seus clientes. Monte uma nova tabela chamada RESUMO. Essa tabela terá uma linha por cliente e as colunas serão os campos: Id, Idade, Estado, Gasto_Total. As primeiras colunas são auto-explicativas e podem ser obtidas diretamente na tabela COMPRAS. A última coluna deve trazer a soma de todas as compras feitas por cada cliente. Essa tabela é a primeira parte da resposta. A segunda parte será obter a soma, a média e o desvio padrão dos gastos por estado. Isto é, qual a soma, a média e o desvio padrão do campo Total_Gasto para cada estado.
+
+```{r}
+
+cadastro <- read_csv2("CADASTRO.csv", 
+                      col_types = cols(Estado = col_factor(),
+                                       Idade = col_integer()))
+
+compras <- read_csv2("COMPRAS.csv", 
+                     col_types = cols(Valor_Compra = col_double()))
+
+resumo <- left_join(cadastro, compras, by = c("Id", "Id")) %>%
+  group_by(Id, Nome, Idade, Estado) %>%
+  summarise(Gasto_Total = sum(Valor_Compra)) %>%
+  select(Id, Nome, Idade, Estado, Gasto_Total) %>%
+  ungroup()
+
+resumo %>% group_by(Estado) %>%
+  summarise(Soma = sum(Gasto_Total),
+            Media = mean(Gasto_Total),
+            DesvioPadrao = sd(Gasto_Total)) %>%
+  ungroup()
+
+```
+
+
+## PERGUNTA 11
+
+*Utilizando COMPRAS e CADASTRO:* Apresente a distribuição dos campos numéricos da tabela RESUMO através de um boxplot e um histograma. Coloque legenda dos eixos x e y do gráfico.
+
+```{r}
+
+library(gridExtra)
+
+p1 <- resumo %>% ggplot(aes(Idade)) + 
+  geom_boxplot() + labs(x = 'Idade', y = 'Contagem')
+  
+p2 <- resumo %>% ggplot(aes(Idade)) + 
+  geom_histogram(color="black", fill="white") + 
+   labs(x = 'Idade', y = 'Contagem')
+
+p3 <- resumo %>% ggplot(aes(Gasto_Total)) + 
+  geom_boxplot() + labs(x = 'Idade', y = 'Contagem')
+
+p4 <- resumo %>% ggplot(aes(Gasto_Total)) + 
+  geom_histogram(color="black", fill="white") + 
+   labs(x = 'Idade', y = 'Contagem')
+
+grid.arrange(p2, p1, p4, p3, ncol = 2, nrow = 2)
+
+```
+
+
+## PERGUNTA 12
+
+*Utilizando COMPRAS e CADASTRO:* Sua empresa considera jovem os clientes com menos de 30 anos. A partir disso, elabore um gráfico de barras comparando o gasto médio de clientes jovens e velhos. Ou seja, a altura da barra será o gasto médio do gasto de cada um dos grupos.
+
+```{r}
+
+resumo_12 <- resumo %>%
+  mutate(Grupo_Etario = ifelse(Idade >= 30, "Velho", "Jovem")) %>% 
+  group_by(Grupo_Etario) %>%
+  summarise(Gasto_Medio = mean(Gasto_Total)) %>%
+  ungroup()
+  
+resumo_12 %>% ggplot(aes(Grupo_Etario, Gasto_Medio)) + 
+  geom_bar(stat = 'identity') + labs(x = 'Grupo Etário', y = 'Gasto Médio')
+
+```
+
+
+## PERGUNTA 13
+
+*Crie uma função* que, dado um número X, faça duas coisas: (1) retorna os números pares de 1 a 9 que não fazem parte de X; (2) retorna uma mensagem indicando se o número é par ou ímpar. Exemplo: se passarmos o número 239, a função deve retornar 4, 6, 8 e “ímpar”. Pode ser em forma de duas mensagens ou uma mensagem com os números e a definição de par ou ímpar. A escolha é sua.
+
+```{r}
+
+epar <- function(x){
+  vetor <- as.numeric(strsplit(as.character(x), '')[[1]])
+  y <- vetor[which(vetor %% 2 == 0)]
+  print(setdiff(c(2,4,6,8), y))
+  ifelse(x %% 2 == 0, 'Par', 'Ímpar')
+}
+
+epar(21345789) # não contém o dígito 06
+epar(81365678) # não contém os dígitos 02 e 04
+
+
+```
+
+
+## PERGUNTA 14
+
+*Escreva uma função* que receba uma string e retorne a mesma string sem nenhuma letra repetida. Exemplo: se a função receber a palavra “casa”, ela deve retornar “cas”.
+
+```{r}
+
+separastring <- function(x){
+  vetor <- unique(strsplit(x, NULL)[[1]])
+  capture.output(cat(vetor, sep='')) 
+}
+
+separastring('paralelepipedo')
+
+```
+
+
+## PERGUNTA 15
+
+*Escreva uma função* chamada return_percentile que receba como entrada um array de dimensão (N,1) e um percentile qualquer, e retorne o valor referente a este percentile. Não vale usar as funções percentile, quartile, etc.
+Exemplo de aplicação:
+> X = [0,1,2,3,4,5,6,7,8,9,10]
+> return_percentile(X, .9)
+> output: 9
+
+```{r}
+
+return_percentile <- function(x, y){
+  sort(x)
+  pos <- length(x)*y
+  ifelse(x[pos] == x[ceiling(pos)], ((x[pos] + x[pos+1])/2), x[ceiling(pos)])
+}
+
+x <- c(0:10)
+return_percentile(x, 0.9)
+return_percentile(x, 0.2)
+
+```
+
